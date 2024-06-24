@@ -18,6 +18,44 @@ cp.datafolder_fig2 = [cp.savedir_ '/Fig2/data']; %This m-file has one dependency
 
 cp.tensordatafolder=['/Users/Sujay/Dropbox (MIT)/physiology_data_for_sharing/EC']; %change this folder to your local folder you downloaded tensor data
 
+%% Hebbian learning with Oja's rule on a simplified model 
+
+clear;close all
+nModule=4;%20
+lm_module=1:4;%1:20;
+module_phases = 45:90:360; %[50 150 320];30:45:360;90; 
+weights = nan(500,360,nModule,length(module_phases));
+lr=0.0000002;
+
+if length(lm_module)==1
+    for mph = 1:length(module_phases)
+        [out,params]=gc1d_init_oja(nModule, lm_module, module_phases(mph),1,lr);
+        weights(:,:,:,mph)=out.weights;
+        outs{mph}=out;
+        mph
+    end
+    params.module_phases=module_phases;
+    params.lm_module=lm_module;
+    
+     save(['Hebb_learn_sim_' num2str(nModule) 'mod_' num2str(length(module_phases)) 'phases_1e7lr_irrelugarLM'],'params','outs','weights')
+    disp(['Hebb_learn_sim_' num2str(nModule) 'mod_' num2str(length(module_phases)) 'phases_1e7lr saved!!'])
+    
+else
+    
+    for mph = 1:length(lm_module)
+        [out,params]=gc1d_init_oja(nModule, lm_module(mph), module_phases,1,lr);
+        weights(:,:,:,mph)=out.weights;
+        outs{mph}=out;
+        module=mph
+    end
+    
+    params.module_phases=module_phases;
+    params.lm_module=lm_module;
+    
+     save(['Hebb_learn_sim_20mod_' num2str(nModule) 'mod_' num2str(length(module_phases)) 'phases_1e7lr_relugarLM'],'params','outs','weights')
+    disp(['Hebb_learn_sim_20mod_' num2str(nModule) 'mod_' num2str(length(module_phases)) 'phases_1e7lr saved!!'])
+end
+
 
 %% CAN e.g. model simulation Fig 4c
 
