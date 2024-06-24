@@ -1,2 +1,2 @@
 # Neupane_Fiete_Jazayeri_mental_navigation
-Primate behavior and neural data for mental navigation task. 
+Code for reproducing all plots in Neupane_Fiete_Jazayeri_mental_navigation_Nature_2024
