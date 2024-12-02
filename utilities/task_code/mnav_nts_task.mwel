@@ -1,0 +1,920 @@
+///////////////////////////////////////////////////////////////////////////////
+//
+// Stimuli
+//
+///////////////////////////////////////////////////////////////////////////////
+
+//*******************************
+//****** SET VARIABLES **********
+//*******************************
+
+
+%define num_stims = 9
+%define num_trials_per_stim = 100000
+var training =1
+var mask_test_stims = 1
+var dir_discrimination=0
+
+
+var session = 1
+
+var test_stim_padding = 3
+var interleve = 0 
+var stim_size = 7
+var target_stim_position_y = -4
+var test_stim_position_y = 4
+var test_stim_index_tolerance = 0.25  // Fraction of (stim_size + test_stim_padding)
+var test_stim_drift_speed = 20  // degrees per second
+var feedback_interval = .75s
+
+
+var br=.5
+var bg=.5
+var bb=.5
+
+var acc_th = 75
+var mental_trial_th = 72 * 2 
+var visual_trial_th = 72
+var trial_th = 0
+var max_trial = 72 * 5
+var L = 20 // moving average window size
+//////////////////////////////////
+//////////////////////////////////
+
+stimulus_display (
+    background_color = br,bg,bb
+        redraw_on_every_refresh = true
+    announce_stimuli_on_implicit_updates = false
+
+    )
+
+var stim_index (scope = local; default_value = 0)
+
+%define for_each_stim ()
+    range_replicator (
+        variable = stim_index
+        from = 0
+        to = num_stims - 1
+        step = 1
+        )
+%end
+
+%define for_each_pair ()
+    range_replicator (
+        variable = stim_index
+        from = 0
+        to = num_stims * (num_stims-1) - 1
+        step = 1
+        )
+%end
+
+
+
+
+var syncmtt (0) {                  // variable to sync in matlab
+    report ('syncmtt = $syncmtt')
+}
+
+//
+// Target stimuli
+//
+
+
+var target_stim_index = -1
+var initial_test_stim_index = -1
+
+
+stimulus_group target_img_stims {
+    for_each_stim {
+        image_file 'img_target_stim_${stim_index}' (
+            path = "images/imageset1/${stim_index}.jpg"
+
+            x_size = stim_size
+            x_position = 0
+            y_position = target_stim_position_y
+            )
+    }
+}
+
+stimulus_group target_img_stims2 {
+    for_each_stim {
+        image_file 'img_target_stim2_${stim_index}' (
+            path = "images/imageset2/${stim_index}.jpg"
+
+            x_size = stim_size
+            x_position = 0
+            y_position = target_stim_position_y
+            )
+    }
+}
+
+stimulus_group target_img_stims3 {
+    for_each_stim {
+        image_file 'img_target_stim3_${stim_index}' (
+            path = "images/imageset3/${stim_index}.jpg"
+
+            x_size = stim_size
+            x_position = 0
+            y_position = target_stim_position_y
+            )
+    }
+}
+
+
+//
+// Initial state stimuli
+//
+
+var test_stim_offset = 0
+var test_stim_drift_start_time = 0
+var midline_drift_start_time = 0
+var test_stim_drift_direction = 0
+%define test_stim_drift_max = display_bounds('right') - test_stim_offset
+%define test_stim_drift_min = display_bounds('left') - test_stim_offset - (num_stims - 1) * (stim_size + test_stim_padding)
+%define test_stim_drift_nominal = test_stim_drift_direction * test_stim_drift_speed * (next_frame_time() - test_stim_drift_start_time) / 1e6
+%define test_stim_drift = min(test_stim_drift_max, max(test_stim_drift_min, test_stim_drift_nominal))
+
+var show_drift = true
+%define test_stim_position_x = test_stim_offset + ${stim_index} * (stim_size + test_stim_padding) + show_drift * test_stim_drift
+var test_stims_visible = true
+var show_overlap = false
+
+stimulus_group img_stims {
+    for_each_stim {
+        image_file 'img_stim_${stim_index}' (
+	    path = "images/imageset1/${stim_index}.jpg"
+            x_size = stim_size
+	    alpha_multiplier = test_stims_visible or (show_overlap and
+                                                      test_stim_position_x >= -(stim_size + test_stim_padding) / 2 and
+                                                      test_stim_position_x <=  (stim_size + test_stim_padding) / 2)
+            x_position = test_stim_position_x
+	    y_position = test_stim_position_y
+            )
+    }
+}
+
+stimulus_group img_stims2 {
+    for_each_stim {
+        image_file 'img_stim2_${stim_index}' (
+         
+	    path = "images/imageset2/${stim_index}.jpg"
+
+            x_size = stim_size
+	    alpha_multiplier = test_stims_visible or (show_overlap and
+                                                      test_stim_position_x >= -(stim_size + test_stim_padding) / 2 and
+                                                      test_stim_position_x <=  (stim_size + test_stim_padding) / 2)
+            x_position = test_stim_position_x
+	    y_position = test_stim_position_y
+            )
+    }
+}
+
+stimulus_group img_stims3 {
+    for_each_stim {
+        image_file 'img_stim3_${stim_index}' (
+         
+	    path = "images/imageset3/${stim_index}.jpg"
+
+            x_size = stim_size
+	    alpha_multiplier = test_stims_visible or (show_overlap and
+                                                      test_stim_position_x >= -(stim_size + test_stim_padding) / 2 and
+                                                      test_stim_position_x <=  (stim_size + test_stim_padding) / 2)
+        x_position = test_stim_position_x
+	    y_position = test_stim_position_y
+            )
+    }
+}
+
+%define test_stim_index_within_tolerance(index) abs(target_stim_index - index) <= test_stim_index_tolerance
+
+%define current_test_stim_index = -(test_stim_offset + test_stim_drift) / (stim_size + test_stim_padding)
+var selected_test_stim_index = -1
+
+
+//
+// Masks
+//
+
+%define mask_width = display_bounds('right')
+
+rectangle test_stim_mask_left (
+    color = br,bg,bb
+    x_size = mask_width
+    y_size = stim_size*3/2
+    x_position = -(mask_width + stim_size) / 2
+    y_position = test_stim_position_y
+    alpha_multiplier = mask_test_stims
+    )
+
+rectangle test_stim_mask_right (
+    color = br,bg,bb
+    x_size = mask_width
+    y_size = stim_size*3/2
+    x_position = (mask_width + stim_size) / 2
+    y_position = test_stim_position_y
+    alpha_multiplier = mask_test_stims
+    )
+
+
+///////////////////////////////////////////////////////////////////////////////
+//
+// Keyboard
+//
+///////////////////////////////////////////////////////////////////////////////
+
+
+var left_arrow_pressed = false
+var right_arrow_pressed = false
+
+%include keyboard_device
+
+keyboard_device keyboard {
+    keyboard_channel (
+        key = 'left_arrow'
+        value = left_arrow_pressed
+        )
+    keyboard_channel (
+        key = 'right_arrow'
+        value = right_arrow_pressed
+        )
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//
+// Joystick and NIDAQ
+//
+///////////////////////////////////////////////////////////////////////////////
+
+//var joy = 0  // AI0
+//var juice=0 // DIO
+//var left=1.4 //left voltage threshold for joystick
+//var right=2.2//right threshold
+//nidaq nidaq (
+  //  name = Dev1
+    //update_interval = 3ms
+    //analog_input_data_interval = 1ms
+    //analog_output_data_interval = 1ms
+    //) {
+    //nidaq_analog_input_voltage (
+      //  channel_number = 0
+        //range_min = -10
+        //range_max = 10
+        //voltage = joy
+        //)
+   //nidaq_digital_output (
+     //   port_number = 1
+       // num_lines_in_port = 8
+        //line0=juice
+        //)
+//}
+
+
+
+///////////////////////////////////////////////////////////////////////////////
+//
+// Sounds
+//
+///////////////////////////////////////////////////////////////////////////////
+
+
+//wav_file correct_sound ('sounds/correct.wav')
+//wav_file incorrect_sound ('sounds/incorrect.wav')
+
+
+///////////////////////////////////////////////////////////////////////////////
+//
+// Protocol
+//
+///////////////////////////////////////////////////////////////////////////////
+
+
+var reward_duration=20ms //seconds
+var tp=[0] //produced time by button press or joystick to reach target stimulus from test
+var ta=[0] //actual distance in time between target and test stimulus
+var rt =[0] //reaction time
+var attempt=0 //number of takes to get to the target
+var tr=0 //counter for num of trials 
+var attempt1=0 //counter for num of 1 attempt trials
+var att1pc=0 //var for proportion of 1 attempt trials
+var attempt1_mental=0
+var att1pc_mental=0
+var current_ta=0
+var current_tp=0
+var rt_data=[0]
+var ta_data=[0]
+var tp_data=[0]
+var attempt_data=[0]
+var training_data=[0]
+var stimOnset=0
+var imgset=0
+var untrained_idx = [2,6]
+var true_ta=0
+imgset=1
+var start_stims = 0
+var index = 0
+var stage = 0
+var pair_index=0
+var seen_only = 1 // 1: seen_only, 0: seen+unseen
+var start_index = 0
+var pairs = [[3, 6], [6, 5], [5, 4], [1, 3], [8, 0], [7, 0], [7, 1], [6, 7], [2, 5], [0, 6],
+	      [5, 2], [5, 0], [3, 5], [5, 7], [0, 5], [2, 7], [8, 6], [3, 7], [4, 3], [7, 4],
+		[1, 8], [4, 5], [6,3], [6, 2], [4, 0], [4, 8], [7, 5], [7, 2], [3, 1], [4, 1],
+		[1, 5], [0, 3], [3,4], [8,1], [0, 2], [1, 7]]
+var count = 0
+var suc = 0
+var global_tr = 0
+var imgset_data = [0]
+var session_data = [0]
+var stage_data = [0]
+var seen_only_data = [0]
+var start_landmark_data = [0]
+var target_landmark_data = [0]
+
+protocol 'Mental Time Travel imageset1' {
+    start_io_device (keyboard)
+//start_io_device (eye_tracker)
+
+   // start_io_device (nidaq)
+//    imgset=1
+//    for_each_stim {
+ //       list {
+//		if (imgset==1){
+//		    live_queue_stimulus (img_stims[stim_index])
+//		}
+//		if (imgset==2){
+//		    live_queue_stimulus (img_stims2[stim_index])
+//		}
+//		if (imgset==3){
+//		    live_queue_stimulus (img_stims3[stim_index])
+//		}
+ //       }
+  //  }
+    imgset = (int)(session / 2) + 1
+	if (training == 0){
+	    trial_th = mental_trial_th
+	}
+	if (training == 1){
+	    trial_th = visual_trial_th
+	}
+
+    block (nsamples = num_trials_per_stim) {
+        list (
+            selection = random_without_replacement
+            nsamples = num_stims
+            sampling_method = samples
+            ) {
+            for_each_pair{
+                trial {
+                    task {
+                        state 'Begin trial' {
+			    syncmtt=1
+ 			    if (seen_only == 1){
+				    pair_index = stim_index % 36
+				    start_index = pairs[pair_index][0]
+				    initial_test_stim_index = pairs[pair_index][0]
+				    target_stim_index  = pairs[pair_index][1]
+			   }
+ 			    if (seen_only == 0){
+					start_index = stim_index % 9 
+					target_stim_index = (int)(stim_index / 9)    // 0-8 
+				    	initial_test_stim_index = start_index
+					if (target_stim_index == start_index){
+						target_stim_index = 8
+					}
+	                            }
+			  report('$stim_index start $start_index  target $target_stim_index')
+//			    training = training+0 //(tr%10)<5 //uncomment to interleve train2 and test trials
+//                            initial_test_stim_index = target_stim_index
+                            //while (initial_test_stim_index == target_stim_index or (initial_test_stim_index == untrained_idx[0] and target_stim_index == untrained_idx[1]) or (initial_test_stim_index == untrained_idx[1] and target_stim_index == untrained_idx[0])) {
+
+                            test_stim_offset = -initial_test_stim_index * (stim_size + 	test_stim_padding)				                      
+			    if (imgset == 1){
+	                            queue_stimulus (target_img_stims[target_stim_index])
+				    index = 0
+				    while (index < num_stims){
+					live_queue_stimulus(img_stims[index])
+					index += 1
+				    }
+			    }
+			    if (imgset == 2){
+	                            queue_stimulus (target_img_stims2[target_stim_index])
+				    index = 0
+				    while (index < num_stims){
+					live_queue_stimulus(img_stims2[index])
+					index += 1
+    				}
+			    }
+			    if (imgset == 3){
+                           	     queue_stimulus (target_img_stims3[target_stim_index])
+				     index = 0
+				    while (index < num_stims){
+					live_queue_stimulus(img_stims3[index])
+					index += 1
+				    }
+			    }
+			    live_queue_stimulus (test_stim_mask_left)
+			    live_queue_stimulus (test_stim_mask_right)
+                            stimOnset=next_frame_time()                            
+                            update_display ()
+                            
+                            ta[attempt] = (target_stim_index-initial_test_stim_index)*(stim_size + test_stim_padding)/test_stim_drift_speed
+                            current_ta=ta[attempt]
+
+                            goto ('Wait for key release')
+                        }
+
+                        state 'Wait for key release' {
+                            show_drift = training
+                            test_stims_visible = training
+                            show_overlap = not training
+
+                            goto (
+                                target = 'Wait for key press'
+                                when = not (left_arrow_pressed or right_arrow_pressed)//(joy>left and joy<right) //
+                                )
+                        }
+
+                        state 'Wait for key press' {
+                            assert (not (left_arrow_pressed or right_arrow_pressed)) //(joy>left and joy<right)
+			    
+                            goto (
+                                target = 'Drift left'
+                                when = left_arrow_pressed //joy<left//
+                                )
+                            goto (
+                                target = 'Drift right'
+                                when = right_arrow_pressed //joy>right//
+                                )
+                        }
+
+                        state 'Drift left' {
+			                rt[attempt]=(now() - stimOnset)/1e6
+                            test_stim_drift_start_time = next_frame_time()
+                            test_stim_drift_direction = 1
+
+                            goto (
+                                target = 'Check selection'
+                                when = not left_arrow_pressed //joy>left //
+                                )
+                        }
+
+                        state 'Drift right' {
+                            rt[attempt]=(now() - stimOnset)/1e6                            
+                            test_stim_drift_start_time = next_frame_time()
+                            test_stim_drift_direction = -1
+
+                            goto (
+                                target = 'Check selection'
+                                when = not right_arrow_pressed//joy<right//
+                                )
+                        }
+
+                        state 'Check selection' {
+                        tp[attempt] = -test_stim_drift_direction*(now() - test_stim_drift_start_time)/1e6 
+                        current_tp=tp[attempt]
+                        
+
+                        report ('produced temporal distance = $current_tp')                            
+
+                        attempt+=1                          
+                        test_stim_offset += test_stim_drift
+                                    test_stim_drift_direction = 0
+
+                                    selected_test_stim_index = current_test_stim_index
+
+
+                        ta[attempt] = (target_stim_index-selected_test_stim_index)*(stim_size + test_stim_padding)/test_stim_drift_speed
+                        current_ta = ta[attempt]
+                       true_ta=ta[0]
+                            report ('new true distance (error) = $true_ta')
+
+                            goto (
+                                target = 'Correct selection'
+                                 when = test_stim_index_within_tolerance(selected_test_stim_index)						  
+                                )
+                            goto ('Incorrect selection')
+                        }
+
+                        state 'Correct selection' {
+                            //play_sound (correct_sound)
+
+                            goto ('End trial')
+                        }
+
+                        state 'Incorrect selection' {
+                            //play_sound (incorrect_sound)
+
+                            goto ('Wait for key release')
+                        }
+
+                        state 'End trial' {
+                            test_stims_visible = false
+                            show_overlap = true
+                            syncmtt=0 // send variables to matlab
+                        
+                            //rt1tt=rt[0]
+                            rt_data[global_tr]=rt[0]
+                            ta_data[global_tr]=ta[0]
+                            tp_data[global_tr]=tp[0]
+                            attempt_data[global_tr]=attempt
+			    training_data[global_tr]=training
+			    imgset_data[global_tr] = imgset
+			    session_data[global_tr] = session
+			    stage_data[global_tr] = stage
+			    seen_only_data[global_tr] = seen_only
+			    start_landmark_data[global_tr] = initial_test_stim_index
+	   	 	    target_landmark_data[global_tr] = target_stim_index 
+                            tr+=1
+			    global_tr += 1
+			if (attempt==1) {
+				if (training==1){
+					attempt1+=1
+				}
+				if (training!=1){
+					attempt1_mental += 1
+				}
+			}
+			att1pc = 100* attempt1/tr
+			att1pc_mental = 100 * attempt1_mental/tr
+			report ('proportion of 1 attempt trial = $att1pc, mental = $att1pc_mental')
+
+		    if (imgset == 1){
+				dequeue_stimulus (target_img_stims[target_stim_index])
+		    }
+		    if (imgset == 2){
+				dequeue_stimulus (target_img_stims2[target_stim_index])
+		    }
+		    if (imgset == 3){
+				dequeue_stimulus (target_img_stims3[target_stim_index])
+		    }
+		    suc = 0
+		    index = max(0, tr-L)
+		    count = 0
+		    while(index < tr){
+			if (attempt_data[index] == 1){
+				suc += 1
+			}
+			index += 1
+			count += 1
+		 }
+		    att1pc = suc / count * 100
+		   report('Accuracy: $att1pc')
+		    if ((tr>= trial_th and att1pc >= acc_th) or (tr == max_trial)) {
+				if (stage > 2 and session == 5){ // Evaluate all visual tasks in the last session
+					stage += 1
+	    			 	training = 1
+					tr = 0
+					att1pc = 0
+					seen_only = 0
+					 if (stage == 4){ // session 3 should be finished
+						imgset = 3
+					 }
+					 if (stage == 5){ // it is already visual
+						imgset = 1 
+					 }
+		    		 	if (stage == 6){
+				    		imgset = 2
+				     	}
+				}
+				if (stage == 3 and session == 3){
+					stage += 1
+					stage += 1
+					training = 1
+					tr = 0
+					att1pc = 0
+					seen_only = 0
+					imgset = 1
+				}
+				if (stage == 2 and session > 2){ // session 1, 2 should be finished
+					stage += 1
+					training = 0
+					tr = 0
+					att1pc = 0
+					seen_only = 0
+					imgset += 1
+					if (session == 3){ // visual
+						training = 1
+					}
+				}
+				if (stage == 1 and session > 0){ // session 0 should be finished
+					stage += 1
+					training = 0
+					tr = 0
+					att1pc = 0
+					seen_only = 0
+					imgset = 1
+					if (session == 1){ // Env 1 Visual Unseen
+					    training = 1
+					}
+				}
+				if (stage == 0){ // visual -> mental
+					stage += 1
+					training = 0
+					tr = 0
+					att1pc = 0
+					seen_only = 0
+					if (session % 2 == 0){ // test day, all data is used
+						seen_only = 1
+					}
+				}
+			}
+			report('Session $session Stage $stage Env $imgset IsVisual $training SeenOnly $seen_only, Trial $tr')
+
+
+                            ta=[]
+                            tp=[]
+                            rt=[]
+                            attempt=0
+                            wait (feedback_interval)
+
+
+                            show_overlap = false
+                            update_display ()
+
+                            yield ()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    stop_io_device (keyboard)
+//stop_io_device (eye_tracker)
+
+   
+  //  stop_io_device (nidaq)
+}
+
+
+
+
+
+///////////////////////////////////////////////////////////////////////////////
+//
+// Protocol: eye calibration 9 point cal
+//
+///////////////////////////////////////////////////////////////////////////////
+
+//eyelink eye_tracker (
+//    tracker_ip = '100.1.1.1'
+//    tracking_dist = 1024
+//    data_interval = 1ms
+//    pupil_lx = eye_x_raw
+//    pupil_ly = eye_y_raw
+//    )
+
+var eye_x_raw = 0
+var eye_y_raw = 0
+
+var eye_x = 0
+var eye_y = 0
+
+var eye_h = 0
+var eye_v = 0
+
+linear_eye_calibrator eye_calibrator (
+    eyeh_raw = eye_x_raw
+    eyev_raw = eye_y_raw
+    eyeh_calibrated = eye_h
+    eyev_calibrated = eye_v
+    )
+
+
+
+boxcar_filter_1d (
+    in1 = eye_h
+    out1 = eye_x
+    width_samples = 5
+    )
+
+boxcar_filter_1d (
+    in1 = eye_v
+    out1 = eye_y
+    width_samples = 5
+    )
+
+var fixation_pos_x = 0
+var fixation_pos_y = 0
+var fixation_point_size = .5
+var fixation_width = 5
+
+var eye_in_window = false
+var saccade = false
+var cancel = true
+
+
+basic_eye_monitor (
+    eyeh_calibrated = eye_x
+    eyev_calibrated = eye_y
+    eye_state = saccade
+    width_samples = 5
+    saccade_entry_speed = 60
+    saccade_exit_speed = 20
+    )
+
+
+var cal_fixation_duration = 800ms
+var cal_fix_pos_x (scope = local; default_value = 0)
+var cal_fix_pos_y (scope = local; default_value = 0)
+var num_stims_shown = 0
+var miss_count = 0
+var success = 0
+var failure = 0
+var ignore = 0
+
+
+
+circular_fixation_point fixation_point (
+    trigger_width = fixation_width
+    trigger_watch_x = eye_x
+    trigger_watch_y = eye_y
+    trigger_flag = eye_in_window
+    color = 1,0,0
+    x_size = fixation_point_size
+    x_position = fixation_pos_x
+    y_position = fixation_pos_y
+    )
+
+
+var reward_duration_cal=50ms  
+var reward_interval_calib = 500ms
+
+
+
+
+protocol 'Eye Calibration 9point' {
+    report ('******** STARTING 9-point CALIBRATION ********')
+    //start_io_device (nidaq)
+    start_io_device (keyboard)
+    //start_io_device (eye_tracker)
+    //clear_calibration (eye_calibrator)
+
+    num_stims_shown = 0
+    miss_count = 0
+
+    list calibration_list (selection = sequential) {
+        range_replicator (
+            variable = cal_fix_pos_x
+            from = -10
+            to = 10
+            step = 10
+        ) {
+            range_replicator (
+                variable = cal_fix_pos_y
+                from = -10
+                to = 10
+                step = 10
+            ) {
+                trial {
+                    task {
+                        state 'cal wait' {
+                            wait (100ms)
+
+                            fixation_pos_x = cal_fix_pos_x
+                            fixation_pos_y = cal_fix_pos_y
+                            queue_stimulus (fixation_point)
+                            update_display ()
+                            start_timer (
+                                timer = cal_timer
+                                duration = 55000ms
+                                )
+
+                           
+
+                            goto (
+                                target = 'cal ignore'
+                                when =  timer_expired(cal_timer)
+                                )
+                            goto (
+                                target = 'cal acquire'
+                                when = right_arrow_pressed //eye_in_window and (not saccade)
+                                )
+                        }
+
+                        state 'cal acquire' {
+                         
+                           report ('************** Fixating **************')
+					cancel=false
+					
+					 schedule ( 					//pulsed reward sceheme during fixation
+						delay=10ms
+						duration= reward_interval_calib
+						repeats = -999
+						cancel = cancel	
+						) {
+							report('juice_on')
+			    				wait(reward_duration_cal)
+			    				report('juice_off')
+						}
+
+                            goto ('cal fixation')
+                        }
+
+                        state 'cal fixation' {
+                            begin_calibration_average (eye_calibrator)
+
+                            //goto (
+                               // target = 'cal failure'
+                                //when = left_arrow_pressed//not eye_in_window
+                                //)
+                           
+                            goto (
+                                target = 'cal success'
+                                when = left_arrow_pressed //timer_expired(cal_timer)
+                                )
+                        }
+
+                        
+
+                        state 'cal pre reward' {
+                            //wait(1s)
+
+                            goto (
+                                target = 'cal success'
+                                when = left_arrow_pressed //or saccade //or timer_expired(cal_timer)
+                                )
+                        }
+
+                        state 'cal success' {
+                            report ('************** HIT!!!!! **************')
+			    cancel=true
+                            end_calibration_average_and_take_sample (
+                                calibrator = eye_calibrator
+                                calibratable_object = fixation_point
+                                )
+
+                            success += 1
+                            dequeue_stimulus (fixation_point)
+                            update_display ()
+
+                            //reward = reward_duration
+
+                            num_stims_shown += 1
+                            miss_count = 0
+                            accept_selections (calibration_list)
+			    wait(.3s)
+                            yield ()
+                        }
+
+                        state 'cal failure' {
+                            report ('************** MISS!!!! **************')
+
+                            end_calibration_average_and_ignore (eye_calibrator)
+                          
+                            wait (500ms)
+
+                            dequeue_stimulus (fixation_point)
+                            update_display ()
+
+                            failure += 1
+                            miss_count += 1
+                            reject_selections (calibration_list)
+
+                            goto (
+                                target = 'cal break'
+                                when = miss_count == 7
+                                )
+                            yield ()
+                        }
+
+                        state 'cal ignore' {
+                            report ('************* IGNORE!!!! *************')
+
+                            dequeue_stimulus (fixation_point)
+                            update_display ()
+
+                            ignore += 1
+                            miss_count += 1
+                            reject_selections (calibration_list)
+
+                            goto (
+                                target = 'cal break'
+                                when = miss_count == 7
+                                )
+                            yield ()
+                        }
+
+                        state 'cal break' {
+                            miss_count = 0
+                            wait (2s)
+                            yield ()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    report ('******** CALIBRATION FINISHED ********')
+
+    
+    //update_calibration (eye_calibrator)
+    //stop_io_device (eye_tracker)
+    stop_io_device (keyboard)
+    //stop_io_device (nidaq)
+    wait (1s)  // Let completion sound finish playing
+}
+
+
+
